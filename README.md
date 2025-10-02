@@ -76,18 +76,7 @@ python run.py
 ```
 Les logs seront affichés dans la console et enregistrés dans le dossier `/logs`.
 
-### Exécution Automatisée (Planificateur de tâches Windows)
 
-Le projet est conçu pour être lancé via le fichier `run.bat`.
 
-1.  **Vérifiez le fichier `run.bat` :** Assurez-vous que les chemins vers l'exécutable Python de votre `.venv` et vers le script `run.py` sont corrects et absolus.
-
-2.  **Configurez le Planificateur de tâches de Windows :**
-    - Créez une nouvelle tâche.
-    - **Action :** "Démarrer un programme".
-    - **Programme/script :** Indiquez le chemin absolu vers `run.bat`.
-    - **Démarrer dans (facultatif) :** **(Champ crucial)** Indiquez le chemin absolu vers le dossier racine du projet (ex: `C:\Users\VotreNom\PythonProject\WeeklyDataCollector`).
-    - **Déclencheur :** Configurez la tâche pour qu'elle s'exécute chaque semaine à l'heure souhaitée.
-    - **Paramètres de sécurité :** Pour une autonomie complète, le compte utilisateur nécessite le droit "Ouvrir une session en tant que tâche" (`Log on as a batch job`). Si ce droit n'est pas disponible, utilisez l'option "N'exécuter que si l'utilisateur a ouvert une session".
 
 
