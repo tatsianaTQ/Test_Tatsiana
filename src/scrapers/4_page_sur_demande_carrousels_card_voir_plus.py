@@ -46,7 +46,10 @@ def accept_cookies(dr, wait):
         ).click()
 
 def wait_blocks(dr, timeout=60):
-    """Attend un chargement réellement complet."""
+    """
+    Attend un chargement réellement complet : document.readyState, body, et les blocs de la page.
+    C'est la fonction la plus importante pour la synchronisation.
+    """
     WebDriverWait(dr, timeout).until(
         lambda d: d.execute_script("return document.readyState") == "complete"
     )
@@ -101,8 +104,8 @@ def click_voir_plus(dr, wait, bloc, idx, typ, titre, rows):
     log(f"Bouton « Voir plus » → {url}")
     rows.append([idx, typ, titre, '', 'Voir plus', url, chemin])
     dr.back()
-    with suppress(TimeoutException):
-        wait_blocks(dr, 10)
+    # On attend que la page se recharge après le retour
+    wait_blocks(dr, 20)
 
 # -------------------- MAIN --------------------------------------------------
 def run():
@@ -130,22 +133,14 @@ def run():
         log(f"Carrousels détectés : {car_total}")
         logging.info(f"Carrousels détectés : {car_total}")
 
-        # --- MODIFICATION FINALE ET CRUCIALE ---
-        # La boucle principale itère maintenant sur le nombre total de carrousels DÉJÀ CHARGÉS.
-        # Nous ne rechargeons PLUS la page (`safe_get`) à chaque itération.
         for idx in range(1, car_total + 1):
-            # La ligne suivante a été supprimée car elle annulait tout le bénéfice
-            # du défilement initial en rechargeant la page à chaque fois.
-            # safe_get(dr, URL, debug_dir=ROOT / "debug") # <-- SUPPRIMÉ
-
             try:
-                # On cherche simplement le bloc suivant sur la page déjà chargée et complète.
                 bloc = dr.find_element(By.XPATH, f"//app-page-block[{idx}]")
                 dr.execute_script("arguments[0].scrollIntoView({block:'center'});", bloc)
-                time.sleep(0.5) # Petite pause pour stabiliser l'affichage
+                time.sleep(0.5)
             except Exception as e:
-                log(f"!!! AVERTISSEMENT: Impossible de trouver ou de faire défiler jusqu'au bloc {idx}. On continue. Erreur: {e}")
-                continue # Si un bloc n'est pas trouvé, on passe au suivant sans planter.
+                log(f"!!! AVERTISSEMENT: Impossible de trouver le bloc {idx}. On continue. Erreur: {e}")
+                continue
 
             typ = (
                 "Grande carrousel (swiper)" if bloc.find_elements(By.CSS_SELECTOR, 'swiper-slide') else
@@ -159,16 +154,15 @@ def run():
 
             log(f"\n{idx}. {typ} : {titre}")
             
-            # La logique interne (click_voir_plus, traitement des cartes) utilise dr.back().
-            # C'est pourquoi après chaque retour, le code doit refaire un find_element,
-            # ce qu'il fait déjà correctement.
             click_voir_plus(dr, wait, bloc, idx, typ, titre, rows)
 
             if "Grande" in typ:
                 metas = []
-                # La recherche des métadonnées se fait sur le bloc actuel
+                # On doit retrouver le bloc car la page a pu changer après click_voir_plus
+                bloc = dr.find_element(By.XPATH, f"//app-page-block[{idx}]")
                 for sl in bloc.find_elements(By.CSS_SELECTOR, "swiper-slide:not([class*='-duplicate'])"):
                     with suppress(Exception):
+                        # ... (logique d'extraction des métadonnées)
                         sid = int(sl.get_attribute('data-swiper-slide-index'))
                         lab = (sl.get_attribute('aria-label') or '').strip()
                         if not lab or lab.replace(' ', '').replace('/', '').isdigit():
@@ -186,7 +180,6 @@ def run():
 
                 log(f"  Nombre de cartes : {len(metas)}")
                 for ordre, (sid, lab) in enumerate(metas, 1):
-                    # Après dr.back(), il faut retrouver le bloc.
                     car = dr.find_element(By.XPATH, f"//app-page-block[{idx}]")
                     dr.execute_script("arguments[0].scrollIntoView({block:'center'});", car)
                     swipe = 0
@@ -200,11 +193,9 @@ def run():
                                 if link:
                                     dr.execute_script("arguments[0].removeAttribute('target');", link)
                                     link.click()
-                                else:
-                                    act.click()
+                                else: act.click()
                                 break
-                        except Exception:
-                            pass
+                        except Exception: pass
                         with suppress(Exception):
                             car.find_element(By.CSS_SELECTOR, '.ic-arrow-right-bg').click()
                         time.sleep(0.25)
@@ -213,15 +204,16 @@ def run():
                     url    = dr.current_url
                     chemin = url.split('.tv/')[1] if '.tv/' in url else ''
                     rows.append([idx, typ, titre, ordre, lab, url, chemin])
+                    
+                    # --- CORRECTION FINALE ---
                     dr.back()
-                    with suppress(TimeoutException):
-                        wait_blocks(dr, 10)
+                    # On attend que la page soit de nouveau prête après le retour.
+                    wait_blocks(dr, 20)
+                    # -------------------------
 
             elif "Petite" in typ:
-                # Pour les carrousels "Petite", la logique rechargeait déjà la page,
-                # ce qui est redondant mais laissons-le pour l'instant pour ne pas tout casser.
-                # L'idéal serait de refactoriser aussi cette partie.
-                safe_get(dr, URL, debug_dir=ROOT / "debug")
+                # La logique pour "Petite" rechargeait déjà la page, ce qui est une forme d'attente.
+                # Pour la cohérence, nous allons la modifier pour utiliser la même stratégie.
                 bloc = dr.find_element(By.XPATH, f"//app-page-block[{idx}]")
                 dr.execute_script("arguments[0].scrollIntoView({block:'center'});", bloc)
                 noms, vus = [], set()
@@ -233,21 +225,17 @@ def run():
                             if nm and nm not in vus:
                                 vus.add(nm)
                                 noms.append(nm)
-                    if len(vus) == last:
-                        break
+                    if len(vus) == last: break
                     last = len(vus)
                     try:
                         nxt = bloc.find_element(By.CSS_SELECTOR, '.slick-next.slick-arrow')
-                    except Exception:
-                        break
-                    if 'slick-disabled' in nxt.get_attribute('class'):
-                        break
-                    nxt.click()
-                    time.sleep(0.35)
+                        if 'slick-disabled' in nxt.get_attribute('class'): break
+                        nxt.click()
+                        time.sleep(0.35)
+                    except Exception: break
 
                 log(f"  Nombre de cartes : {len(noms)}")
                 for ordre, nom in enumerate(noms, 1):
-                    # Après dr.back(), il faut retrouver le bloc.
                     bloc = dr.find_element(By.XPATH, f"//app-page-block[{idx}]")
                     dr.execute_script("arguments[0].scrollIntoView({block:'center'});", bloc)
                     found, tries = False, 0
@@ -257,35 +245,32 @@ def run():
                                 nm = s.find_element(By.CSS_SELECTOR, 'h3 span[aria-hidden]').text.strip()
                                 if nm == nom:
                                     link = None
-                                    with suppress(Exception):
-                                        link = s.find_element(By.TAG_NAME, 'a')
+                                    with suppress(Exception): link = s.find_element(By.TAG_NAME, 'a')
                                     if link:
                                         dr.execute_script("arguments[0].removeAttribute('target');", link)
                                         link.click()
-                                    else:
-                                        s.click()
+                                    else: s.click()
                                     found = True
                                     break
-                        if found:
-                            break
+                        if found: break
                         try:
                             nxt = bloc.find_element(By.CSS_SELECTOR, '.slick-next.slick-arrow')
-                        except Exception:
-                            break
-                        if 'slick-disabled' in nxt.get_attribute('class'):
-                            break
-                        nxt.click()
-                        time.sleep(0.25)
-                        tries += 1
-                    if not found:
-                        continue
+                            if 'slick-disabled' in nxt.get_attribute('class'): break
+                            nxt.click()
+                            time.sleep(0.25)
+                            tries += 1
+                        except Exception: break
+                    if not found: continue
                     time.sleep(2)
                     url    = dr.current_url
                     chemin = url.split('.tv/')[1] if '.tv/' in url else ''
                     rows.append([idx, typ, titre, ordre, nom, url, chemin])
+                    
+                    # --- CORRECTION FINALE ---
                     dr.back()
-                    with suppress(TimeoutException):
-                        wait_blocks(dr, 10)
+                    # On attend également ici.
+                    wait_blocks(dr, 20)
+                    # -------------------------
 
         # -------------------- EXPORT FICHIERS --------------------------------
         COLS = ["# Carrousel","Type","Titre du carrousel","#","titre (card)","URL détail","Chemin"]
@@ -306,7 +291,3 @@ def run():
 
 if __name__ == "__main__":
     run()
-
-
-
-
