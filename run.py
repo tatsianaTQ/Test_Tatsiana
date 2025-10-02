@@ -18,9 +18,9 @@ from typing import Tuple, List, Optional
 
 PYTHON_EXECUTABLE = "python"
 SCRIPTS_TO_RUN = [
-    "src/scrapers/1_page_acceuil_carrousels_card_voir_plus.py",
-    "src/scrapers/2_page_en_vedette_carrousels_card_voir_plus.py",
-    "src/scrapers/3_page_jeunesse_carrousels_card_voir_plus.py",
+    #"src/scrapers/1_page_acceuil_carrousels_card_voir_plus.py",
+    #"src/scrapers/2_page_en_vedette_carrousels_card_voir_plus.py",
+    #"src/scrapers/3_page_jeunesse_carrousels_card_voir_plus.py",
     "src/scrapers/4_page_sur_demande_carrousels_card_voir_plus.py",
 ]
 OUTPUT_DIR = Path("output")
@@ -186,3 +186,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
