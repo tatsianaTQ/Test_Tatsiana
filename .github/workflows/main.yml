@@ -34,7 +34,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           # cette version correspond à celle que je utilise localement.
-          python-version: '3.9'
+          python-version: '3.11'
 
       # Étape 3 : Installe le navigateur Google Chrome et le ChromeDriver.
       # une étape cruciale pour que Selenium puisse fonctionner dans un environnement sans interface graphique.
