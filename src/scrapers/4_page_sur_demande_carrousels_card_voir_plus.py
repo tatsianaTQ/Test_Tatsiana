@@ -10,6 +10,7 @@
 # • Export CSV + XLSX + durée d’exécution
 # ---------------------------------------------------------------------------
 
+
 import os
 import time
 import csv
@@ -17,7 +18,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from contextlib import suppress
-from typing import Union # <-- ИЗМЕНЕНИЕ: Добавлено для совместимости
+from typing import Union
 
 import pandas as pd
 from selenium.webdriver.common.by import By
@@ -27,13 +28,11 @@ from selenium.common.exceptions import TimeoutException
 from src.common.selenium_setup import new_driver
 
 # -------------------- CONFIG ------------------------------------------------
-URL   = "https://video.telequebec.tv/sur%20demande"                    # <-- URL de la page d’accueil
-WAIT  = 30                               # Timeout Actions
-# -----------------
+URL   = "https://video.telequebec.tv/sur%20demande"          
+WAIT  = 30
 DATE  = datetime.now( ).strftime("%Y-%m-%d")
 ROOT  = Path("output"); ROOT.mkdir(exist_ok=True)
 
-# Mode de log minimal : n’afficher que l’entête et les 2 lignes de fin.
 _LOG_MINIMAL = os.getenv("LOG_MINIMAL", "0") == "1"
 def log(*args, **kwargs):
     if not _LOG_MINIMAL:
@@ -47,15 +46,8 @@ def accept_cookies(dr, wait):
             EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler"))
         ).click()
 
-#
-def wait_blocks(dr, timeout=60): # 60 sec
-# -----------------
-    """
-    Attend un chargement réellement complet :
-      1) document.readyState == 'complete'
-      2) présence du <body>
-      3) présence des blocs de page (app-page-block)
-    """
+def wait_blocks(dr, timeout=60):
+    """Attend un chargement réellement complet."""
     WebDriverWait(dr, timeout).until(
         lambda d: d.execute_script("return document.readyState") == "complete"
     )
@@ -66,20 +58,14 @@ def wait_blocks(dr, timeout=60): # 60 sec
         EC.presence_of_all_elements_located((By.CSS_SELECTOR, "app-page-block"))
     )
 
-# 
-def safe_get(dr, url, tries=2, base_timeout=60, debug_dir: Union[Path, None] = None): # 
-# -----------------
-    """
-    Ouvre l’URL et attend les blocs; en cas de timeout, fait 1 retry avec délai augmenté.
-    Si debug_dir est fourni, sauvegarde un screenshot en cas d’échec pour diagnostic.
-    """
+def safe_get(dr, url, tries=2, base_timeout=60, debug_dir: Union[Path, None] = None):
+    """Ouvre l’URL et attend les blocs; en cas de timeout, fait 1 retry."""
     last_err = None
     for i in range(tries):
         dr.get(url)
         with suppress(Exception):
             accept_cookies(dr, WebDriverWait(dr, 5))
         try:
-            # Таймаут теперь берется из base_timeout, который мы увеличили
             wait_blocks(dr, timeout=base_timeout + i*15)
             return
         except TimeoutException as e:
@@ -93,7 +79,7 @@ def safe_get(dr, url, tries=2, base_timeout=60, debug_dir: Union[Path, None] = N
 
 # -------------------- BOUTON « VOIR PLUS » ---------------------------------
 def click_voir_plus(dr, wait, bloc, idx, typ, titre, rows):
-    """Clique sur « Voir plus » s’il existe et journalise l’URL (silencieux si LOG_MINIMAL)."""
+    """Clique sur « Voir plus » s’il existe et journalise l’URL."""
     xpaths = [
         ".//a[contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'voir plus')]",
         ".//*[@role='link' and contains(translate(@aria-label,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'voir plus')]",
@@ -128,22 +114,36 @@ def run():
 
     try:
         # Page initiale
-        print(f"Démarrage à {start.strftime('%H:%M:%S')}")  # toujours affiché
+        print(f"Démarrage à {start.strftime('%H:%M:%S')}")
         safe_get(dr, URL, debug_dir=ROOT / "debug")
 
+        # --- NOUVELLE ÉTAPE : DÉFILEMENT COMPLET DE LA PAGE ---
+        # Ceci force le chargement de tous les éléments "paresseux" (lazy-loaded).
+        log("Début du défilement pour charger tous les blocs de la page...")
+        last_height = dr.execute_script("return document.body.scrollHeight")
+        while True:
+            # Fait défiler la page jusqu'en bas
+            dr.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            # Attend un court instant pour laisser le temps aux nouveaux éléments de se charger
+            time.sleep(3)
+            # Calcule la nouvelle hauteur de la page et la compare à l'ancienne
+            new_height = dr.execute_script("return document.body.scrollHeight")
+            if new_height == last_height:
+                break  # Sort de la boucle si la hauteur n'augmente plus
+            last_height = new_height
+        log("Fin du défilement.")
+        # ---------------------------------------------------------
+
+        # Maintenant, on compte les carrousels en étant sûr qu'ils sont tous chargés
         car_total = len(dr.find_elements(By.TAG_NAME, 'app-page-block'))
         log(f"Carrousels détectés : {car_total}")
         logging.info(f"Carrousels détectés : {car_total}")
 
-
         for idx in range(1, car_total + 1):
-            # Rechargement « propre » pour éviter les stale elements
             safe_get(dr, URL, debug_dir=ROOT / "debug")
-
             bloc = dr.find_element(By.XPATH, f"//app-page-block[{idx}]")
             dr.execute_script("arguments[0].scrollIntoView({block:'center'});", bloc)
 
-            # Type + titre du bloc
             typ = (
                 "Grande carrousel (swiper)" if bloc.find_elements(By.CSS_SELECTOR, 'swiper-slide') else
                 "Petite carrousel (slick)"  if bloc.find_elements(By.CSS_SELECTOR, 'app-slide')  else
@@ -155,11 +155,8 @@ def run():
                 titre = f"Carrousel_{idx}"
 
             log(f"\n{idx}. {typ} : {titre}")
-
-            # 0) Bouton « Voir plus »
             click_voir_plus(dr, wait, bloc, idx, typ, titre, rows)
 
-            # 1) Grande carrousel (Swiper)
             if "Grande" in typ:
                 metas = []
                 for sl in bloc.find_elements(By.CSS_SELECTOR, "swiper-slide:not([class*='-duplicate'])"):
@@ -181,13 +178,8 @@ def run():
 
                 log(f"  Nombre de cartes : {len(metas)}")
                 for ordre, (sid, lab) in enumerate(metas, 1):
-                    # --- ИЗМЕНЕНИЕ ---
-                    # Перезагрузка страницы для каждой карточки отключена для ускорения.
-                    # safe_get(dr, URL, debug_dir=ROOT / "debug")
-                    # -----------------
                     car = dr.find_element(By.XPATH, f"//app-page-block[{idx}]")
                     dr.execute_script("arguments[0].scrollIntoView({block:'center'});", car)
-
                     swipe = 0
                     while swipe < 80:
                         try:
@@ -208,23 +200,18 @@ def run():
                             car.find_element(By.CSS_SELECTOR, '.ic-arrow-right-bg').click()
                         time.sleep(0.25)
                         swipe += 1
-
                     time.sleep(2)
                     url    = dr.current_url
                     chemin = url.split('.tv/')[1] if '.tv/' in url else ''
                     rows.append([idx, typ, titre, ordre, lab, url, chemin])
-
                     dr.back()
                     with suppress(TimeoutException):
                         wait_blocks(dr, 10)
 
-            # 2) Petite carrousel (Slick)
             elif "Petite" in typ:
-                # Reprise du bloc avant itération Slick
                 safe_get(dr, URL, debug_dir=ROOT / "debug")
                 bloc = dr.find_element(By.XPATH, f"//app-page-block[{idx}]")
                 dr.execute_script("arguments[0].scrollIntoView({block:'center'});", bloc)
-
                 noms, vus = [], set()
                 last = -1
                 for _ in range(50):
@@ -248,13 +235,8 @@ def run():
 
                 log(f"  Nombre de cartes : {len(noms)}")
                 for ordre, nom in enumerate(noms, 1):
-                    # 
-                    # 
-                    # safe_get(dr, URL, debug_dir=ROOT / "debug")
-                    # -----------------
                     bloc = dr.find_element(By.XPATH, f"//app-page-block[{idx}]")
                     dr.execute_script("arguments[0].scrollIntoView({block:'center'});", bloc)
-
                     found, tries = False, 0
                     while tries < 120 and not found:
                         for s in bloc.find_elements(By.CSS_SELECTOR, 'app-slide'):
@@ -282,15 +264,12 @@ def run():
                         nxt.click()
                         time.sleep(0.25)
                         tries += 1
-
                     if not found:
                         continue
-
                     time.sleep(2)
                     url    = dr.current_url
                     chemin = url.split('.tv/')[1] if '.tv/' in url else ''
                     rows.append([idx, typ, titre, ordre, nom, url, chemin])
-
                     dr.back()
                     with suppress(TimeoutException):
                         wait_blocks(dr, 10)
@@ -306,7 +285,6 @@ def run():
 
         pd.DataFrame(rows, columns=COLS).to_excel(xlsx_f, index=False)
 
-        # Sortie minimale et unifiée : toujours seulement ces 2 lignes
         print(f"\nFichiers enregistrés : {csv_f}   {xlsx_f}")
         print(f"Durée totale : {(datetime.now()-start).seconds} sec")
 
@@ -315,4 +293,5 @@ def run():
 
 if __name__ == "__main__":
     run()
+
 
