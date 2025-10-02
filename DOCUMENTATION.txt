@@ -49,35 +49,4 @@ Le cœur du projet est le script `run.py`. Il agit comme un chef d'orchestre et 
     - Le script enregistre la durée totale de l'exécution et se termine.
 
 
----------------------------
-3. DÉBOGAGE ET ERREURS COURANTES
----------------------------
 
-- **PermissionError: [WinError 5] Accès refusé: 'output'**
-  - **Cause :** Le script n'a pas les droits pour créer des dossiers/fichiers. Cela se produit presque toujours lorsque la tâche planifiée est exécutée depuis un répertoire système (ex: `C:\Windows\System32`).
-  - **Solution :** Remplir le champ **"Démarrer dans"** dans les propriétés de l'action de la tâche planifiée avec le chemin complet du dossier du projet.
-
-- **ModuleNotFoundError: No module named 'src'**
-  - **Cause :** Python ne trouve pas les modules locaux car le script est exécuté depuis un autre répertoire.
-  - **Solution :** Utiliser la commande `python -m nom.du.module` et s'assurer que le champ "Démarrer dans" est correctement configuré (voir point précédent).
-
-- **L'e-mail n'est pas envoyé (erreur d'authentification)**
-  - **Cause :** L'identifiant (`SMTP_USER`) ou le mot de passe (`SMTP_PASSWORD`) dans le fichier `.env` est incorrect.
-  - **Solution :** Vérifier que la clé API SendGrid est correcte et qu'elle n'a pas expiré.
-
-- **La fenêtre noire (cmd) apparaît et disparaît instantanément**
-  - **Cause :** Erreur dans le fichier `run.bat` (chemin incorrect vers Python ou le script) ou erreur de permission fondamentale.
-  - **Solution :** Ajouter temporairement la commande `pause` à la fin de `run.bat` pour voir le message d'erreur avant que la fenêtre ne se ferme.
-
-
----------------------------
-4. CONFIGURATION DE L'AUTOMATISATION
----------------------------
-
-L'automatisation repose sur le **Planificateur de tâches de Windows** et le fichier `run.bat`.
-
-- **`run.bat` :** Ce fichier sert de pont simple entre Windows et Python. Il garantit que le bon interpréteur Python (celui de l'environnement virtuel `.venv`) est utilisé pour lancer le script principal. Les chemins doivent être **absolus** pour éviter toute ambiguïté.
-
-- **Planificateur de tâches :**
-  - **"N'exécuter que si l'utilisateur a ouvert une session" :** C'est l'option la plus simple. La tâche se lancera à l'heure prévue, mais seulement si vous êtes connecté à votre session Windows. C'est une solution de contournement si vous n'avez pas les droits administratifs nécessaires.
-  - **"Exécuter même si l'utilisateur n'est pas connecté" :** C'est l'option idéale pour une autonomie complète. Cependant, elle requiert que votre compte utilisateur dispose du droit de sécurité "Ouvrir une session en tant que tâche" (`Log on as a batch job`). Ce droit doit être accordé par un administrateur système.
