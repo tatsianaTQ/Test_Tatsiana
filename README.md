@@ -58,7 +58,7 @@ WeeklyDataCollector/
     SMTP_SERVER=smtp.sendgrid.net
     SMTP_PORT=587
     SMTP_USER=apikey
-    SMTP_PASSWORD=VOTRE_CLE_API_SENDGRID
+    SMTP_PASSWORD=CLE_API_SENDGRID
 
     # --- Destinataires de l'e-mail ---
     EMAIL_FROM=email@expediteur.com
@@ -89,4 +89,5 @@ Le projet est conçu pour être lancé via le fichier `run.bat`.
     - **Démarrer dans (facultatif) :** **(Champ crucial)** Indiquez le chemin absolu vers le dossier racine du projet (ex: `C:\Users\VotreNom\PythonProject\WeeklyDataCollector`).
     - **Déclencheur :** Configurez la tâche pour qu'elle s'exécute chaque semaine à l'heure souhaitée.
     - **Paramètres de sécurité :** Pour une autonomie complète, le compte utilisateur nécessite le droit "Ouvrir une session en tant que tâche" (`Log on as a batch job`). Si ce droit n'est pas disponible, utilisez l'option "N'exécuter que si l'utilisateur a ouvert une session".
+
 
