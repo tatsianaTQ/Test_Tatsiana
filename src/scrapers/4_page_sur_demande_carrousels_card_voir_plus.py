@@ -46,10 +46,7 @@ def accept_cookies(dr, wait):
         ).click()
 
 def wait_blocks(dr, timeout=60):
-    """
-    Attend un chargement réellement complet : document.readyState, body, et les blocs de la page.
-    C'est la fonction la plus importante pour la synchronisation.
-    """
+    """Attend un chargement réellement complet."""
     WebDriverWait(dr, timeout).until(
         lambda d: d.execute_script("return document.readyState") == "complete"
     )
@@ -103,9 +100,11 @@ def click_voir_plus(dr, wait, bloc, idx, typ, titre, rows):
     chemin = url.split(".tv/")[1] if ".tv/" in url else ""
     log(f"Bouton « Voir plus » → {url}")
     rows.append([idx, typ, titre, '', 'Voir plus', url, chemin])
-    dr.back()
-    # On attend que la page se recharge après le retour
-    wait_blocks(dr, 20)
+    
+    # --- CORRECTION FINALE ---
+    # Remplacer dr.back() par un retour explicite à l'URL de base.
+    safe_get(dr, URL, debug_dir=ROOT / "debug")
+    # -------------------------
 
 # -------------------- MAIN --------------------------------------------------
 def run():
@@ -158,11 +157,9 @@ def run():
 
             if "Grande" in typ:
                 metas = []
-                # On doit retrouver le bloc car la page a pu changer après click_voir_plus
                 bloc = dr.find_element(By.XPATH, f"//app-page-block[{idx}]")
                 for sl in bloc.find_elements(By.CSS_SELECTOR, "swiper-slide:not([class*='-duplicate'])"):
                     with suppress(Exception):
-                        # ... (logique d'extraction des métadonnées)
                         sid = int(sl.get_attribute('data-swiper-slide-index'))
                         lab = (sl.get_attribute('aria-label') or '').strip()
                         if not lab or lab.replace(' ', '').replace('/', '').isdigit():
@@ -206,14 +203,10 @@ def run():
                     rows.append([idx, typ, titre, ordre, lab, url, chemin])
                     
                     # --- CORRECTION FINALE ---
-                    dr.back()
-                    # On attend que la page soit de nouveau prête après le retour.
-                    wait_blocks(dr, 20)
+                    safe_get(dr, URL, debug_dir=ROOT / "debug")
                     # -------------------------
 
             elif "Petite" in typ:
-                # La logique pour "Petite" rechargeait déjà la page, ce qui est une forme d'attente.
-                # Pour la cohérence, nous allons la modifier pour utiliser la même stratégie.
                 bloc = dr.find_element(By.XPATH, f"//app-page-block[{idx}]")
                 dr.execute_script("arguments[0].scrollIntoView({block:'center'});", bloc)
                 noms, vus = [], set()
@@ -267,9 +260,7 @@ def run():
                     rows.append([idx, typ, titre, ordre, nom, url, chemin])
                     
                     # --- CORRECTION FINALE ---
-                    dr.back()
-                    # On attend également ici.
-                    wait_blocks(dr, 20)
+                    safe_get(dr, URL, debug_dir=ROOT / "debug")
                     # -------------------------
 
         # -------------------- EXPORT FICHIERS --------------------------------
