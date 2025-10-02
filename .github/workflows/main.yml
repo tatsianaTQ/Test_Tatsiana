@@ -1,0 +1,63 @@
+# .github/workflows/main.yml
+
+# Nom du workflow qui apparaîtra dans l'onglet "Actions" de GitHub.
+name: Collecte de données et rapport hebdomadaire
+
+# Déclencheurs pour le lancement du workflow.
+on:
+  # 1. Exécution planifiée : chaque semaine, le dimanche à 7:00 UTC.
+  schedule:
+    # Syntaxe cron : minute(0-59) heure(0-23) jour-du-mois(1-31) mois(1-12) jour-de-la-semaine(0-6, 0=Dimanche)
+    - cron: '0 7 * * 0'
+
+  # 2. Permet de lancer ce workflow manuellement depuis la page "Actions" de GitHub.
+  # 
+  workflow_dispatch:
+
+# Définit les tâches (jobs) à exécuter.
+jobs:
+  # Nom du job. Vous pouvez le nommer comme vous le souhaitez.
+  build-and-run:
+    # Spécifie que le job doit s'exécuter sur la dernière version d'Ubuntu.
+    # un environnement Linux standard pour les actions.
+    runs-on: ubuntu-latest
+
+    # Séquence des étapes (steps) que le job va exécuter.
+    steps:
+      # Étape 1 : Clone (télécharge) le code de votre dépôt dans l'environnement virtuel de l'action.
+      # nécessaire pour que le workflow ait accès aux scripts Python.
+      - name: Cloner le code du dépôt
+        uses: actions/checkout@v4
+
+      # Étape 2 : Installe la version de Python.
+      - name: Configurer Python
+        uses: actions/setup-python@v5
+        with:
+          # cette version correspond à celle que je utilise localement.
+          python-version: '3.9'
+
+      # Étape 3 : Installe le navigateur Google Chrome et le ChromeDriver.
+      # une étape cruciale pour que Selenium puisse fonctionner dans un environnement sans interface graphique.
+      - name: Installer Chrome pour Selenium
+        uses: browser-actions/setup-chrome@v1
+
+      # Étape 4 : Installe toutes les dépendances listées dans le fichier requirements.txt.
+      - name: Installer les dépendances Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Étape 5 : Exécute le script principal (run.py).
+      - name: Exécuter le script principal
+        run: python run.py
+        # 'env' permet de définir des variables d'environnement pour cette étape.
+        # Les valeurs sont récupérées de manière sécurisée depuis les "Secrets" de dépôt GitHub.
+        # La syntaxe ${{ secrets.NOM_DU_SECRET }} est la manière de les lire.
+        env:
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          EMAIL_CC: ${{ secrets.EMAIL_CC }}
