@@ -17,6 +17,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from contextlib import suppress
+from typing import Union # <-- ИЗМЕНЕНИЕ: Добавлено для совместимости
 
 import pandas as pd
 from selenium.webdriver.common.by import By
@@ -27,8 +28,9 @@ from src.common.selenium_setup import new_driver
 
 # -------------------- CONFIG ------------------------------------------------
 URL   = "https://video.telequebec.tv/sur%20demande"                    # <-- URL de la page d’accueil
-WAIT  = 15                               # Timeout de base pour WebDriverWait (secondes)
-DATE  = datetime.now().strftime("%Y-%m-%d")
+WAIT  = 30                               # Timeout Actions
+# -----------------
+DATE  = datetime.now( ).strftime("%Y-%m-%d")
 ROOT  = Path("output"); ROOT.mkdir(exist_ok=True)
 
 # Mode de log minimal : n’afficher que l’entête et les 2 lignes de fin.
@@ -45,7 +47,9 @@ def accept_cookies(dr, wait):
             EC.element_to_be_clickable((By.ID, "onetrust-accept-btn-handler"))
         ).click()
 
-def wait_blocks(dr, timeout=35):
+#
+def wait_blocks(dr, timeout=60): # 60 sec
+# -----------------
     """
     Attend un chargement réellement complet :
       1) document.readyState == 'complete'
@@ -62,7 +66,9 @@ def wait_blocks(dr, timeout=35):
         EC.presence_of_all_elements_located((By.CSS_SELECTOR, "app-page-block"))
     )
 
-def safe_get(dr, url, tries=2, base_timeout=35, debug_dir: Path | None = None):
+# 
+def safe_get(dr, url, tries=2, base_timeout=60, debug_dir: Union[Path, None] = None): # 
+# -----------------
     """
     Ouvre l’URL et attend les blocs; en cas de timeout, fait 1 retry avec délai augmenté.
     Si debug_dir est fourni, sauvegarde un screenshot en cas d’échec pour diagnostic.
@@ -73,7 +79,8 @@ def safe_get(dr, url, tries=2, base_timeout=35, debug_dir: Path | None = None):
         with suppress(Exception):
             accept_cookies(dr, WebDriverWait(dr, 5))
         try:
-            wait_blocks(dr, timeout=base_timeout + i*15)  # 35 → 50s au deuxième essai
+            # Таймаут теперь берется из base_timeout, который мы увеличили
+            wait_blocks(dr, timeout=base_timeout + i*15)
             return
         except TimeoutException as e:
             last_err = e
@@ -174,12 +181,15 @@ def run():
 
                 log(f"  Nombre de cartes : {len(metas)}")
                 for ordre, (sid, lab) in enumerate(metas, 1):
-                    safe_get(dr, URL, debug_dir=ROOT / "debug")
+                    # --- ИЗМЕНЕНИЕ ---
+                    # Перезагрузка страницы для каждой карточки отключена для ускорения.
+                    # safe_get(dr, URL, debug_dir=ROOT / "debug")
+                    # -----------------
                     car = dr.find_element(By.XPATH, f"//app-page-block[{idx}]")
                     dr.execute_script("arguments[0].scrollIntoView({block:'center'});", car)
 
                     swipe = 0
-                    while swipe < 80:  # 120 → 80 pour limiter les boucles longues
+                    while swipe < 80:
                         try:
                             act = car.find_element(By.CSS_SELECTOR, 'swiper-slide.swiper-slide-active')
                             if int(act.get_attribute('data-swiper-slide-index')) == sid:
@@ -217,7 +227,7 @@ def run():
 
                 noms, vus = [], set()
                 last = -1
-                for _ in range(50):  # max 50 défilements
+                for _ in range(50):
                     for s in bloc.find_elements(By.CSS_SELECTOR, 'app-slide'):
                         with suppress(Exception):
                             nm = s.find_element(By.CSS_SELECTOR, "h3 span[aria-hidden='true']").text.strip()
@@ -238,7 +248,10 @@ def run():
 
                 log(f"  Nombre de cartes : {len(noms)}")
                 for ordre, nom in enumerate(noms, 1):
-                    safe_get(dr, URL, debug_dir=ROOT / "debug")
+                    # 
+                    # 
+                    # safe_get(dr, URL, debug_dir=ROOT / "debug")
+                    # -----------------
                     bloc = dr.find_element(By.XPATH, f"//app-page-block[{idx}]")
                     dr.execute_script("arguments[0].scrollIntoView({block:'center'});", bloc)
 
@@ -302,3 +315,4 @@ def run():
 
 if __name__ == "__main__":
     run()
+
