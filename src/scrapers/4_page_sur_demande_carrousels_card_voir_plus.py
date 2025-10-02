@@ -10,7 +10,6 @@
 # • Export CSV + XLSX + durée d’exécution
 # ---------------------------------------------------------------------------
 
-
 import os
 import time
 import csv
@@ -28,7 +27,7 @@ from selenium.common.exceptions import TimeoutException
 from src.common.selenium_setup import new_driver
 
 # -------------------- CONFIG ------------------------------------------------
-URL   = "https://video.telequebec.tv/sur%20demande"          
+URL   = "https://video.telequebec.tv/sur%20demande"                    
 WAIT  = 30
 DATE  = datetime.now( ).strftime("%Y-%m-%d")
 ROOT  = Path("output"); ROOT.mkdir(exist_ok=True)
@@ -113,36 +112,40 @@ def run():
     rows  = []
 
     try:
-        # Page initiale
         print(f"Démarrage à {start.strftime('%H:%M:%S')}")
         safe_get(dr, URL, debug_dir=ROOT / "debug")
 
-        # --- NOUVELLE ÉTAPE : DÉFILEMENT COMPLET DE LA PAGE ---
-        # Ceci force le chargement de tous les éléments "paresseux" (lazy-loaded).
         log("Début du défilement pour charger tous les blocs de la page...")
         last_height = dr.execute_script("return document.body.scrollHeight")
         while True:
-            # Fait défiler la page jusqu'en bas
             dr.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            # Attend un court instant pour laisser le temps aux nouveaux éléments de se charger
             time.sleep(3)
-            # Calcule la nouvelle hauteur de la page et la compare à l'ancienne
             new_height = dr.execute_script("return document.body.scrollHeight")
             if new_height == last_height:
-                break  # Sort de la boucle si la hauteur n'augmente plus
+                break
             last_height = new_height
         log("Fin du défilement.")
-        # ---------------------------------------------------------
 
-        # Maintenant, on compte les carrousels en étant sûr qu'ils sont tous chargés
         car_total = len(dr.find_elements(By.TAG_NAME, 'app-page-block'))
         log(f"Carrousels détectés : {car_total}")
         logging.info(f"Carrousels détectés : {car_total}")
 
+        # --- MODIFICATION FINALE ET CRUCIALE ---
+        # La boucle principale itère maintenant sur le nombre total de carrousels DÉJÀ CHARGÉS.
+        # Nous ne rechargeons PLUS la page (`safe_get`) à chaque itération.
         for idx in range(1, car_total + 1):
-            safe_get(dr, URL, debug_dir=ROOT / "debug")
-            bloc = dr.find_element(By.XPATH, f"//app-page-block[{idx}]")
-            dr.execute_script("arguments[0].scrollIntoView({block:'center'});", bloc)
+            # La ligne suivante a été supprimée car elle annulait tout le bénéfice
+            # du défilement initial en rechargeant la page à chaque fois.
+            # safe_get(dr, URL, debug_dir=ROOT / "debug") # <-- SUPPRIMÉ
+
+            try:
+                # On cherche simplement le bloc suivant sur la page déjà chargée et complète.
+                bloc = dr.find_element(By.XPATH, f"//app-page-block[{idx}]")
+                dr.execute_script("arguments[0].scrollIntoView({block:'center'});", bloc)
+                time.sleep(0.5) # Petite pause pour stabiliser l'affichage
+            except Exception as e:
+                log(f"!!! AVERTISSEMENT: Impossible de trouver ou de faire défiler jusqu'au bloc {idx}. On continue. Erreur: {e}")
+                continue # Si un bloc n'est pas trouvé, on passe au suivant sans planter.
 
             typ = (
                 "Grande carrousel (swiper)" if bloc.find_elements(By.CSS_SELECTOR, 'swiper-slide') else
@@ -155,10 +158,15 @@ def run():
                 titre = f"Carrousel_{idx}"
 
             log(f"\n{idx}. {typ} : {titre}")
+            
+            # La logique interne (click_voir_plus, traitement des cartes) utilise dr.back().
+            # C'est pourquoi après chaque retour, le code doit refaire un find_element,
+            # ce qu'il fait déjà correctement.
             click_voir_plus(dr, wait, bloc, idx, typ, titre, rows)
 
             if "Grande" in typ:
                 metas = []
+                # La recherche des métadonnées se fait sur le bloc actuel
                 for sl in bloc.find_elements(By.CSS_SELECTOR, "swiper-slide:not([class*='-duplicate'])"):
                     with suppress(Exception):
                         sid = int(sl.get_attribute('data-swiper-slide-index'))
@@ -178,6 +186,7 @@ def run():
 
                 log(f"  Nombre de cartes : {len(metas)}")
                 for ordre, (sid, lab) in enumerate(metas, 1):
+                    # Après dr.back(), il faut retrouver le bloc.
                     car = dr.find_element(By.XPATH, f"//app-page-block[{idx}]")
                     dr.execute_script("arguments[0].scrollIntoView({block:'center'});", car)
                     swipe = 0
@@ -209,6 +218,9 @@ def run():
                         wait_blocks(dr, 10)
 
             elif "Petite" in typ:
+                # Pour les carrousels "Petite", la logique rechargeait déjà la page,
+                # ce qui est redondant mais laissons-le pour l'instant pour ne pas tout casser.
+                # L'idéal serait de refactoriser aussi cette partie.
                 safe_get(dr, URL, debug_dir=ROOT / "debug")
                 bloc = dr.find_element(By.XPATH, f"//app-page-block[{idx}]")
                 dr.execute_script("arguments[0].scrollIntoView({block:'center'});", bloc)
@@ -235,6 +247,7 @@ def run():
 
                 log(f"  Nombre de cartes : {len(noms)}")
                 for ordre, nom in enumerate(noms, 1):
+                    # Après dr.back(), il faut retrouver le bloc.
                     bloc = dr.find_element(By.XPATH, f"//app-page-block[{idx}]")
                     dr.execute_script("arguments[0].scrollIntoView({block:'center'});", bloc)
                     found, tries = False, 0
@@ -293,5 +306,7 @@ def run():
 
 if __name__ == "__main__":
     run()
+
+
 
 
